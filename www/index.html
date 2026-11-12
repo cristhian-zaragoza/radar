@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Storm Hunter Radar</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#020706"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#020706;--p:#05110b;--l:#164d30;--v:#28ff78;--vc:#76ffab;--t:#d8ffe4;--g:#7d9c89}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,sans-serif}
+body{padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px);max-width:560px;margin:auto}
+h1{font-size:18px;margin:12px 0 8px;color:var(--vc)}
+.row{display:flex;gap:6px}select,input,button{background:#0a301b;color:var(--t);border:1px solid var(--l);border-radius:8px;padding:10px;font:inherit;min-height:44px}
+select{flex:1;min-width:0}input{flex:1;min-width:0}button:active{background:#146238}
+#radar{width:100%;aspect-ratio:1;display:block;margin:10px 0;background:var(--p);border:1px solid var(--l);border-radius:12px}
+#estado{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px;color:var(--g);font-size:13px}
+#nivel{padding:4px 12px;border-radius:6px;font-weight:700;color:#000}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.d{background:var(--p);border:1px solid var(--l);border-radius:8px;padding:8px 10px}.d b{display:block;font-size:19px;color:var(--vc)}.d span{color:var(--g);font-size:12px}
+h2{font-size:15px;margin:16px 0 6px}ul{list-style:none;margin:0;padding:0}
+li{padding:8px 10px;margin-bottom:6px;background:var(--p);border-left:5px solid var(--v);border-radius:4px}
+.nota{color:var(--g);font-size:12px;margin-top:14px;line-height:1.4}a{color:var(--vc)}
+</style></head><body>
+<h1>Storm Hunter Radar</h1>
+<div class="row"><select id="ciudad" aria-label="Ciudad"></select><button id="act">Actualizar</button></div>
+<div class="row" style="margin-top:6px"><input id="q" placeholder="Buscar otra ciudad…"><button id="bus">Buscar</button></div>
+<canvas id="radar"></canvas>
+<div id="estado"><span id="msg">Esperando datos…</span><span id="nivel">NORMAL</span></div>
+<div class="grid" id="datos"></div>
+<h2>Alertas</h2><ul id="alertas"><li>Sin datos todavía.</li></ul>
+<p class="nota">Datos reales de Open-Meteo. La celda del radar es una representación visual basada en precipitación y viento; no es reflectividad Doppler. Ante riesgo real consultá al <a href="https://www.smn.gob.ar/alertas" target="_blank" rel="noopener">Servicio Meteorológico Nacional</a>.</p>
+<script>
+const UB={"Concordia, Entre Ríos":[-31.3929,-58.0209],"Paraná, Entre Ríos":[-31.7413,-60.5115],"Gualeguaychú, Entre Ríos":[-33.0094,-58.5172],"Concepción del Uruguay, Entre Ríos":[-32.4825,-58.2372],"Colón, Entre Ríos":[-32.2232,-58.1431],"Villaguay, Entre Ríos":[-31.8653,-59.0268],"Chajarí, Entre Ríos":[-30.7505,-57.9796],"Federación, Entre Ríos":[-30.983,-57.9175],"Federal, Entre Ríos":[-30.9547,-58.7833],"La Paz, Entre Ríos":[-30.7446,-59.6457],"Victoria, Entre Ríos":[-32.6184,-60.1548],"Diamante, Entre Ríos":[-32.0664,-60.6383],"Nogoyá, Entre Ríos":[-32.3931,-59.7895],"Rosario del Tala, Entre Ríos":[-32.3029,-59.1451],"Gualeguay, Entre Ríos":[-33.1416,-59.3097],"San José, Entre Ríos":[-32.205,-58.218],"Villa Elisa, Entre Ríos":[-32.1632,-58.4008],"San Salvador, Entre Ríos":[-31.624,-58.5052],"Santa Elena, Entre Ríos":[-30.944,-59.786],"Crespo, Entre Ríos":[-32.0287,-60.3066],"Cerrito, Entre Ríos":[-31.5833,-60.0833],"Bovril, Entre Ríos":[-31.343,-59.445],"Ubajay, Entre Ríos":[-31.793,-58.313],"Buenos Aires, CABA":[-34.6037,-58.3816],"La Plata, Buenos Aires":[-34.9214,-57.9544],"Mar del Plata, Buenos Aires":[-38.0055,-57.5426],"Bahía Blanca, Buenos Aires":[-38.7196,-62.2724],"Rafaela, Santa Fe":[-31.2503,-61.4867],"Sunchales, Santa Fe":[-30.944,-61.5615],"Santa Fe, Santa Fe":[-31.6333,-60.7],"Rosario, Santa Fe":[-32.9468,-60.6393],"Zárate, Buenos Aires":[-34.0981,-59.0286],"La Ferrere, Buenos Aires":[-34.7486,-58.586],"La Matanza, Buenos Aires":[-34.7667,-58.6167],"Pergamino, Buenos Aires":[-33.889,-60.5736],"Junín, Buenos Aires":[-34.585,-60.9589],"Tandil, Buenos Aires":[-37.3217,-59.1332],"Olavarría, Buenos Aires":[-36.8927,-60.3225],"Necochea, Buenos Aires":[-38.5545,-58.7396],"San Nicolás de los Arroyos, Buenos Aires":[-33.3343,-60.2108]};
+const NC=["#28ff78","#ffe600","#ff8500","#ff2525","#b62cff"],NN=["NORMAL","PRECAUCIÓN","ALERTA","PELIGRO","EXTREMO"];
+const LC=["#185e37","#169cff","#28ff78","#ffe600","#ff8500","#ff2525","#b62cff"],LN=["SIN PRECIPITACIÓN","DÉBIL","LIGERA","MODERADA","FUERTE","SEVERA","GRANIZO POSIBLE"];
+const U={rafaga:[50,70,90,110],viento:[40,60,80,100],lluvia:[1,5,10,25],prob:[40,60,80,95],cape:[500,1500,2500,4000],calor:[32,35,38,41],frio:[3,0,-3,-6],visib:[5,2,1,.2],pres:[3,5,8,12]};
+const CL={0:"Despejado",1:"Mayormente despejado",2:"Parcialmente nublado",3:"Nublado",45:"Niebla",48:"Niebla con escarcha",51:"Llovizna débil",53:"Llovizna",55:"Llovizna intensa",61:"Lluvia débil",63:"Lluvia moderada",65:"Lluvia fuerte",80:"Chubascos débiles",81:"Chubascos",82:"Chubascos violentos",95:"Tormenta eléctrica",96:"Tormenta con granizo",99:"Tormenta con granizo fuerte"};
+const $=i=>document.getElementById(i);
+let ciudades={...UB},ciudad="Concordia, Entre Ríos",D=null,nivelMax=0,lvl=0,err=false,ult=null;
+let cel={x:-.35,y:-.3},estela=[],barrido=0,t0=performance.now();
+try{const g=JSON.parse(localStorage.getItem("sh_cfg")||"{}");if(g.ciudades)Object.assign(ciudades,g.ciudades);if(g.ciudad&&ciudades[g.ciudad])ciudad=g.ciudad}catch(e){}
+function guardar(){try{const extra={};for(const k in ciudades)if(!UB[k])extra[k]=ciudades[k];localStorage.setItem("sh_cfg",JSON.stringify({ciudad,ciudades:extra}))}catch(e){}}
+function llenar(){const s=$("ciudad");s.innerHTML="";Object.keys(ciudades).forEach(k=>{const o=document.createElement("option");o.value=o.textContent=k;s.appendChild(o)});s.value=ciudad}
+const niv=(v,u,inv)=>{let n=0;u.forEach((t,i)=>{if(inv?v<=t:v>=t)n=i+1});return n};
+async function cargar(){
+ const [la,lo]=ciudades[ciudad];$("msg").textContent="Actualizando…";
+ const url=`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=precipitation_probability,cape,visibility,pressure_msl&past_hours=3&forecast_hours=6&timezone=auto&wind_speed_unit=kmh`;
+ try{const r=await fetch(url);if(!r.ok)throw 0;const j=await r.json();D=j.current;D.h=j.hourly;err=false;ult=new Date();procesar();estela=[]}
+ catch(e){err=true;$("msg").textContent=D?"Sin conexión · datos de las "+ult.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}):"Sin conexión"}
+}
+function procesar(){
+ const d=D,h=d.h,al=[];
+ const prob=Math.max(...h.precipitation_probability.filter(x=>x!=null),0),cape=Math.max(...h.cape.filter(x=>x!=null),0);
+ const vis=Math.min(...h.visibility.filter(x=>x!=null).map(x=>x/1000),99);
+ const caida=(h.pressure_msl[0]??0)-(h.pressure_msl[3]??0);
+ const reg=[["Tormenta eléctrica o granizo",d.weather_code>=95?(d.weather_code>=96?4:3):0],
+ ["Ráfagas de "+Math.round(d.wind_gusts_10m)+" km/h",niv(d.wind_gusts_10m,U.rafaga)],
+ ["Viento de "+Math.round(d.wind_speed_10m)+" km/h",niv(d.wind_speed_10m,U.viento)],
+ ["Lluvia de "+d.precipitation+" mm",niv(d.precipitation,U.lluvia)],
+ ["Probabilidad de lluvia "+prob+"% próximas horas",niv(prob,U.prob)],
+ ["Energía convectiva (CAPE) "+Math.round(cape)+" J/kg",niv(cape,U.cape)],
+ ["Calor: sensación "+Math.round(d.apparent_temperature)+"°C",niv(d.apparent_temperature,U.calor)],
+ ["Frío: "+Math.round(d.temperature_2m)+"°C",niv(d.temperature_2m,U.frio,true)],
+ ["Visibilidad baja ("+vis.toFixed(1)+" km)",niv(vis,U.visib,true)],
+ ["Caída de presión de "+caida.toFixed(1)+" hPa en 3 h",niv(caida,U.pres)]];
+ reg.forEach(([t,n])=>{if(n>0)al.push([t,n])});al.sort((a,b)=>b[1]-a[1]);
+ nivelMax=al.length?al[0][1]:0;
+ const p=d.precipitation||0;lvl=d.weather_code>=96?6:p<=0?0:p<.3?1:p<1?2:p<2.5?3:p<7.6?4:5;
+ const ul=$("alertas");ul.innerHTML="";
+ if(!al.length){ul.innerHTML='<li>Sin alertas. Condiciones normales.</li>'}
+ al.forEach(([t,n])=>{const li=document.createElement("li");li.style.borderLeftColor=NC[n];li.textContent=NN[n]+": "+t;ul.appendChild(li)});
+ const nv=$("nivel");nv.textContent=NN[nivelMax];nv.style.background=NC[nivelMax];nv.style.color=nivelMax>2?"#fff":"#000";
+ const dir=["N","NE","E","SE","S","SO","O","NO"][Math.round(d.wind_direction_10m/45)%8];
+ const items=[["Temperatura",d.temperature_2m+" °C"],["Sensación",d.apparent_temperature+" °C"],["Viento",Math.round(d.wind_speed_10m)+" km/h "+dir],["Ráfagas",Math.round(d.wind_gusts_10m)+" km/h"],["Lluvia",d.precipitation+" mm"],["Humedad",d.relative_humidity_2m+" %"],["Presión",Math.round(d.pressure_msl)+" hPa"],["Cielo",CL[d.weather_code]||"Código "+d.weather_code]];
+ $("datos").innerHTML=items.map(([a,b])=>`<div class="d"><span>${a}</span><b>${b}</b></div>`).join("");
+ $("msg").textContent=ciudad+" · "+ult.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+ guardar();
+ if(nivelMax>=3&&navigator.vibrate)try{navigator.vibrate([200,100,200])}catch(e){}
+}
+const cv=$("radar"),ctx=cv.getContext("2d");
+function ajustar(){const r=cv.getBoundingClientRect(),k=window.devicePixelRatio||1;cv.width=r.width*k;cv.height=r.height*k}
+function mez(a,b,t){const f=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const A=f(a),B=f(b);return"rgb("+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(",")+")"}
+function frame(now){
+ const dt=Math.min(now-t0,100);t0=now;barrido+=.035*dt/35;
+ if(D&&D.wind_direction_10m!=null){const v=D.wind_speed_10m||0,a=((D.wind_direction_10m+180)%360-90)*Math.PI/180,p=Math.min(Math.max(v/120,.05),.7)/330*dt/35;
+  cel.x+=Math.cos(a)*p;cel.y+=Math.sin(a)*p;estela.push([cel.x,cel.y]);if(estela.length>60)estela.shift();
+  if(Math.hypot(cel.x,cel.y)>.97){cel.x=Math.cos(a+Math.PI)*.9;cel.y=Math.sin(a+Math.PI)*.9;estela=[]}}
+ dibujar(now);requestAnimationFrame(frame)}
+function dibujar(now){
+ const w=cv.width,h=cv.height,k=w/360,x=ctx,cx=w/2,cy=h/2,R=w/2-26*k;x.clearRect(0,0,w,h);
+ let borde=NC[nivelMax];if(nivelMax>=3&&Math.floor(now/500)%2)borde=mez(borde,"#020706",.75);
+ x.lineWidth=3*k;x.fillStyle="#031109";x.strokeStyle=borde;x.beginPath();x.arc(cx,cy,R,0,7);x.fill();x.stroke();
+ x.lineWidth=k;x.strokeStyle="#164d30";x.fillStyle="#4da978";x.font=8*k+"px sans-serif";
+ for(let i=1;i<=5;i++){const r=R*i/5;if(i<5){x.beginPath();x.arc(cx,cy,r,0,7);x.stroke()}x.fillText(30*i+" km",cx+4*k,cy-r+10*k)}
+ x.strokeStyle="#155c35";x.beginPath();x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.stroke();
+ x.fillStyle="#76ffab";x.font="bold "+14*k+"px sans-serif";x.textAlign="center";x.textBaseline="middle";
+ x.fillText("N",cx,cy-R-12*k);x.fillText("S",cx,cy+R+12*k);x.fillText("E",cx+R+12*k,cy);x.fillText("O",cx-R-12*k,cy);
+ for(let i=22;i>0;i--){x.fillStyle=mez("#031109","#2bff7a",Math.pow(1-i/22,2)*.5);x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,barrido-i*.038-.042,barrido-i*.038);x.fill()}
+ x.strokeStyle="#63ff9c";x.lineWidth=2*k;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(barrido)*R,cy+Math.sin(barrido)*R);x.stroke();
+ if(!D){x.fillStyle=err?"#ff2525":"#7d9c89";x.font="bold "+13*k+"px sans-serif";x.fillText(err?"SIN CONEXIÓN":"ESPERANDO DATOS…",cx,cy+R*.35)}
+ else{
+  for(let i=0;i<estela.length-1;i++){x.strokeStyle=mez("#031109","#3fae72",i/estela.length);x.lineWidth=2*k;x.beginPath();x.moveTo(cx+estela[i][0]*R,cy+estela[i][1]*R);x.lineTo(cx+estela[i+1][0]*R,cy+estela[i+1][1]*R);x.stroke()}
+  const px=cx+cel.x*R,py=cy+cel.y*R,ll=D.precipitation||0,base=Math.min(R*.07+ll*R*.012,R*.15);
+  if(lvl==0){x.setLineDash([4*k,4*k]);x.strokeStyle="#2c7f50";x.lineWidth=2*k;x.beginPath();x.arc(px,py,base,0,7);x.stroke();x.setLineDash([])}
+  else{for(let j=1;j<=lvl;j++){const kk=1-(j-1)/lvl*.62;x.fillStyle=LC[j];[[0,0,1],[.55,-.3,.65],[-.5,.35,.7],[.1,.6,.55]].forEach(([ox,oy,s])=>{x.beginPath();x.arc(px+ox*base*kk,py+oy*base*kk,base*kk*s,0,7);x.fill()})}
+   x.strokeStyle=mez("#020706",LC[lvl],.4);x.lineWidth=2*k;x.beginPath();x.arc(px,py,base*1.9,0,7);x.stroke()}
+  const a=((D.wind_direction_10m+180)%360-90)*Math.PI/180,ex=px+Math.cos(a)*R*.3,ey=py+Math.sin(a)*R*.3;
+  x.strokeStyle="#fff";x.fillStyle="#fff";x.lineWidth=3*k;x.beginPath();x.moveTo(px,py);x.lineTo(ex,ey);x.stroke();
+  x.beginPath();x.moveTo(ex,ey);x.lineTo(ex-Math.cos(a-.4)*9*k,ey-Math.sin(a-.4)*9*k);x.lineTo(ex-Math.cos(a+.4)*9*k,ey-Math.sin(a+.4)*9*k);x.fill();
+  x.font="bold "+10*k+"px sans-serif";x.fillText("CELDA "+LN[lvl],px,py-base*1.9-10*k)}
+ x.fillStyle="#fff";x.strokeStyle="#28ff78";x.lineWidth=3*k;x.beginPath();x.arc(cx,cy,6*k,0,7);x.fill();x.stroke();
+ x.textAlign="left";x.font="bold "+10*k+"px sans-serif";x.fillStyle="#fff";x.fillText(ciudad.split(",")[0].toUpperCase(),cx+12*k,cy-12*k);
+ x.textAlign="center";x.fillStyle="#4a9b6b";x.font="bold "+7*k+"px sans-serif";x.fillText("RADAR VISUAL · OPEN-METEO · NO ES DOPPLER",cx,h-8*k)}
+$("ciudad").onchange=e=>{ciudad=e.target.value;D=null;cel={x:-.35,y:-.3};estela=[];cargar()};
+$("act").onclick=cargar;
+async function buscar(){const q=$("q").value.trim();if(!q)return;$("msg").textContent="Buscando…";
+ try{const r=await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=es&name="+encodeURIComponent(q));const j=await r.json();
+  if(!j.results||!j.results.length){$("msg").textContent="No se encontró «"+q+"»";return}
+  const c=j.results[0],n=c.name+", "+(c.admin1||c.country);ciudades[n]=[c.latitude,c.longitude];ciudad=n;llenar();$("q").value="";D=null;estela=[];cargar()}
+ catch(e){$("msg").textContent="No se pudo buscar. Revisá la conexión."}}
+$("bus").onclick=buscar;$("q").onkeydown=e=>{if(e.key==="Enter")buscar()};
+addEventListener("resize",ajustar);llenar();ajustar();cargar();setInterval(cargar,300000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)cargar()});
+requestAnimationFrame(frame);
+if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script></body></html>

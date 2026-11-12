@@ -1,0 +1,6 @@
+1) Subi todo el contenido de esta carpeta a un repositorio nuevo de GitHub (github.com > New repository).
+2) Si la carpeta oculta .github no se subio, en GitHub: Add file > Create new file, nombre
+   .github/workflows/apk.yml  y pega el contenido del archivo apk.yml.
+3) Pestana Actions > "Compilar APK" > Run workflow. Tarda unos 5-8 minutos.
+4) Entra a la ejecucion terminada, baja a Artifacts y descarga StormHunter-APK (zip con app-debug.apk).
+5) Subi el APK a MediaFire, descargalo en el celular e instalalo (permitir "instalar apps desconocidas").
